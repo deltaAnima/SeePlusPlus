@@ -1,2 +1,4 @@
 # SeePlusPlus
 👁️++
+
+make -j$(nproc)
