@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(SeePlusPlus LANGUAGES CXX CUDA)
 # CUDA architecture(3090)
-set(CMAKE_CUDA_ARCHITECTURES 86, 90) 
+set(CMAKE_CUDA_ARCHITECTURES 86 90) 
 
 set(CMAKE_CXX_STANDARD 17)
 
