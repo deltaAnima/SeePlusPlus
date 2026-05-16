@@ -17,7 +17,10 @@ if(OpenMP_CXX_FOUND)
   target_include_directories(SeePlusPlus PRIVATE /usr/lib/gcc/x86_64-linux-gnu/11/include)
 endif()
 
-target_include_directories(SeePlusPlus PRIVATE include)
+target_include_directories(SeePlusPlus PRIVATE 
+  include
+  third_party/cpp-logger
+)
 
 target_link_libraries(SeePlusPlus PRIVATE ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 
