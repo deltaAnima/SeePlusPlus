@@ -1,38 +1,29 @@
-cmake_minimum_required(VERSION 3.18)
-project(SeePlusPlus LANGUAGES CXX CUDA)
-# CUDA architecture(3090)
-set(CMAKE_CUDA_ARCHITECTURES 86 90) 
+cmake_minimum_required(VERSION 3.10)
+project(SeePlusPlus)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ffmpeg path
-set(FFMPEG_ROOT ${CMAKE_SOURCE_DIR}/third_party/ffmpeg)
+find_package(OpenCV REQUIRED)
+find_package(OpenMP REQUIRED)
 
-include_directories(${FFMPEG_ROOT}/include)
-link_directories(${FFMPEG_ROOT}/lib)
+add_executable(SeePlusPlus
+    src/seePlusPlus.cpp
+    src/decoder.cpp
+  )
 
-add_executable(vid_to_rgb src/test.cpp)
-
-find_package(CUDAToolkit REQUIRED)
-# lib link
-target_link_libraries(vid_to_rgb
-    avformat
-    avcodec
-    swscale
-    avutil
-)
-
-if (CUDAToolkit_FOUND)
-    message(STATUS "CUDA Found! Building with GPU support.")
-    add_definitions(-DUSE_GPU)
-    set(DECODER_SOURCES src/VideoDecoder.cpp src/GpuVideoDecoder.cu)
-else()
-    message(STATUS "CUDA not found. Building CPU version only.")
-    set(DECODER_SOURCES src/VideoDecoder.cpp src/CpuVideoDecoder.cpp)
+if(OpenMP_CXX_FOUND)
+  message(STATUS "OpenMP Include Dirs: ${OpenMP_CXX_INCLUDE_DIRS}")
+  target_include_directories(SeePlusPlus PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
+  target_include_directories(SeePlusPlus PRIVATE /usr/lib/gcc/x86_64-linux-gnu/11/include)
 endif()
 
-add_executable(SeePlusPlus src/test.cpp ${DECODER_SOURCES})
+target_include_directories(SeePlusPlus PRIVATE include)
 
+target_link_libraries(SeePlusPlus PRIVATE ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 
-set_target_properties(vid_to_rgb PROPERTIES INSTALL_RPATH "${FFMPEG_ROOT}/lib")
-target_link_libraries(SeePlusPlus PRIVATE CUDA::cudart avformat avcodec swscale avutil)
+target_compile_options(SeePlusPlus PRIVATE -O3 -march=native)
+
+message(STATUS "OpenCV library status:")
+message(STATUS "    version: ${OpenCV_VERSION}")
+message(STATUS "    libraries: ${OpenCV_LIBS}")
+message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
