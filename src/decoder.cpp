@@ -12,6 +12,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
 
+#include <logger.hpp>
+
 /*
  * Func Name: CPU_video_decoder
  * description: A function for decoding
@@ -19,14 +21,14 @@
 SPP_STRUCTS::VideoData* CPU_video_decoder(const std::string &path,
                                         const bool &isStream = false)
 {
-  std::cout << "CPU_video_decoder will decode the video at :" << path << std::endl;
-  
+  LOG_DEBUG("CPU_video_decoder will decode the video at :" << path);
+
   // 1. Opening the vid. TODO: Make it stream later. Use var isStream for it.
   cv::VideoCapture cap(path);
   // 1-1. Cheack it does it found video
   if(!cap.isOpened())
   {
-    std::cerr << "Video at " << path << "cannot be found!!" << std::endl;
+    LOG_ERR("Video at " << path << "cannot be found!!");
     return nullptr;
   }
 
@@ -51,10 +53,10 @@ SPP_STRUCTS::VideoData* CPU_video_decoder(const std::string &path,
   // 2-4. check is it allocated properly
   if(!raw_ptr_data)
   {
-    std::cerr << "Memory allocation failed!" << std::endl;
+    LOG_ERR("Memory allocation failed!");
     return nullptr;
   }
-  std::cout << "Allocated (Aligned): " << total_size / (1024 * 1024) << " MB" << std::endl;
+  LOG_DEBUG("Allocated (Aligned): " << total_size / (1024 * 1024) << " MB");
 
   // 3. EXTRACTING VIDEO DATA
   int frame_idx = 0;
@@ -110,7 +112,7 @@ SPP_STRUCTS::VideoData* CPU_video_decoder(const std::string &path,
       th.join();
 
     frame_idx += read_count;
-    std::cout << "Progress: " << frame_idx << "/" << count << std::endl;
+    LOG_DEBUG("Progress: " << frame_idx << "/" << count);
   }
 
   SPP_STRUCTS::VideoData* vd = new SPP_STRUCTS::VideoData();
@@ -125,4 +127,26 @@ SPP_STRUCTS::VideoData* CPU_video_decoder(const std::string &path,
   vd->data        = raw_ptr_data;
 
   return vd;
+}
+
+int main(int argc, char* argv[])
+{
+	bool verbose = false;
+	for (int i = 1; i < argc; ++i) {
+		std::string arg = argv[i];
+		if (arg == "--verbose" || arg == "-v")   verbose = true;
+		else if (arg == "--help" || arg == "-h") {
+			std::cout <<
+				"Usage: vn-discord-rpc [OPTIONS]\n\n"
+				"Options:\n"
+				"  -v, --verbose  Enable DEBUG-level logging\n"
+				"  -h, --help     Show this message\n\n";
+			return 0;
+		}
+	}
+
+  if (verbose) {
+    Logger::get().setLevel(LogLevel::DEBUG);
+    LOG_INFO("Debug Verbose");
+  }
 }
