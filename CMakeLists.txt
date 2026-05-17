@@ -1,12 +1,15 @@
 cmake_minimum_required(VERSION 3.10)
 project(SeePlusPlus)
 
+set(cmake_cxx_standard 23)
+set(cmake_cxx_standard_required on)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(OpenCV REQUIRED)
 find_package(OpenMP REQUIRED)
 
 add_executable(SeePlusPlus
+    src/main.cpp
     src/seePlusPlus.cpp
     src/decoder.cpp
   )
