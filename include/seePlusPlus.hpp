@@ -5,6 +5,7 @@
 #include "decoder.hpp"
 #include "SPP_STRUCTS.hpp"
 #include "SPP_UTILS.hpp"
+#include "FindAvgFrame.hpp"
 
 // 3rd party
 #include <cstddef>
