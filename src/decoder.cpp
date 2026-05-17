@@ -128,25 +128,3 @@ SPP_STRUCTS::VideoData* CPU_video_decoder(const std::string &path,
 
   return vd;
 }
-
-int main(int argc, char* argv[])
-{
-	bool verbose = false;
-	for (int i = 1; i < argc; ++i) {
-		std::string arg = argv[i];
-		if (arg == "--verbose" || arg == "-v")   verbose = true;
-		else if (arg == "--help" || arg == "-h") {
-			std::cout <<
-				"Usage: vn-discord-rpc [OPTIONS]\n\n"
-				"Options:\n"
-				"  -v, --verbose  Enable DEBUG-level logging\n"
-				"  -h, --help     Show this message\n\n";
-			return 0;
-		}
-	}
-
-  if (verbose) {
-    Logger::get().setLevel(LogLevel::DEBUG);
-    LOG_INFO("Debug Verbose");
-  }
-}
