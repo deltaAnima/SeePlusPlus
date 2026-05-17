@@ -16,12 +16,12 @@
 class SeePlusPlus
 {
 private:
-  SPP_STRUCTS::VideoData* find_average_frame(SPP_STRUCTS::VideoData* video)
+  SPP_STRUCTS::FrameData* find_average_frame(SPP_STRUCTS::VideoData* video)
   {
     return nullptr;
   }
 
-  size_t KNN_da_frame(SPP_STRUCTS::VideoData* video, SPP_STRUCTS::VideoData* average_frame)
+  size_t KNN_da_frame(SPP_STRUCTS::VideoData* video, SPP_STRUCTS::FrameData* average_frame)
   {
     return 1;
   }
@@ -29,13 +29,13 @@ private:
 public:
   std::string frameHunt(std::string path)
   {
-    // decode -> average -> knn -> return 
+    // decode -> average -> knn -> return
     
     // 1. decode
     SPP_STRUCTS::VideoData* video_raw = CPU_video_decoder(path);
 
     // 2. find average frame TODO: Make a dedicated struct for avg frame
-    SPP_STRUCTS::VideoData* average_frame = this->find_average_frame(video_raw);
+    SPP_STRUCTS::FrameData* average_frame = this->find_average_frame(video_raw);
 
     // 3. find the frame that is the most similar to the average_frame in the video
     size_t idx_of_sim_frame = this->KNN_da_frame(video_raw, average_frame);
