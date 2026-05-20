@@ -8,6 +8,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(OpenCV REQUIRED)
 find_package(OpenMP REQUIRED)
 
+set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(third_party/highway) 
+
 add_executable(SeePlusPlus
     src/main.cpp
     src/seePlusPlus.cpp
@@ -25,7 +30,7 @@ target_include_directories(SeePlusPlus PRIVATE
   third_party/cpp-logger
 )
 
-target_link_libraries(SeePlusPlus PRIVATE ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
+target_link_libraries(SeePlusPlus PRIVATE ${OpenCV_LIBS} OpenMP::OpenMP_CXX hwy)
 
 target_compile_options(SeePlusPlus PRIVATE -O3 -march=native)
 
