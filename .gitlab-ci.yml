@@ -1,0 +1,34 @@
+stages:
+  - build
+
+variables:
+  # Submodules (cpp-logger, highway) are required to build — fetch them recursively.
+  GIT_SUBMODULE_STRATEGY: recursive
+  DEBIAN_FRONTEND: noninteractive
+
+build:
+  stage: build
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update
+    - >
+      apt-get install -y --no-install-recommends
+      build-essential
+      cmake
+      git
+      ca-certificates
+      libopencv-dev
+      libomp-dev
+  script:
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build -j"$(nproc)"
+  artifacts:
+    name: "$CI_PROJECT_NAME-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - build/SeePlusPlus
+    expire_in: 1 week
+  # Speed up repeat runs by caching the CMake build tree.
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - build/
