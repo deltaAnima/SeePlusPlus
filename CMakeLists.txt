@@ -40,6 +40,41 @@ target_link_libraries(SeePlusPlus PRIVATE
 
 target_compile_options(SeePlusPlus PRIVATE -O3)
 
+# --- Unit tests ---
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS)
+  enable_testing()
+
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+  add_subdirectory(third_party/googletest)
+  add_subdirectory(third_party/benchmark)
+
+  add_executable(test_find_avg_frame
+    tests/test_find_avg_frame.cpp
+    src/FindAvgFrame.cpp
+  )
+  target_link_libraries(test_find_avg_frame PRIVATE
+    project_common
+    GTest::gtest_main
+  )
+
+  include(GoogleTest)
+  gtest_discover_tests(test_find_avg_frame)
+
+  add_executable(bench_find_avg_frame
+    tests/bench_find_avg_frame.cpp
+    src/decoder.cpp
+    src/FindAvgFrame.cpp
+  )
+  target_link_libraries(bench_find_avg_frame PRIVATE
+    project_common
+    ${OpenCV_LIBS}
+    benchmark::benchmark_main
+  )
+  target_compile_options(bench_find_avg_frame PRIVATE -O3)
+endif()
+
 # --- Diagnostics ---
 message(STATUS "OpenCV library status:")
 message(STATUS "    version: ${OpenCV_VERSION}")
@@ -50,4 +85,3 @@ message(STATUS "OpenMP library status:")
 message(STATUS "    version: ${OpenMP_CXX_VERSION}")
 message(STATUS "    libraries: ${OpenMP_CXX_LIBRARIES}")
 message(STATUS "    include path: ${OpenMP_CXX_INCLUDE_DIRS}")
-
