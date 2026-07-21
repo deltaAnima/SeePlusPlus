@@ -1,8 +1,10 @@
 stages:
   - build
+  - test
 
 variables:
-  # Submodules (cpp-logger, highway) are required to build — fetch them recursively.
+  # Submodules (cpp-logger, highway, googletest) are required to build —
+  # fetch them recursively.
   GIT_SUBMODULE_STRATEGY: recursive
   DEBIAN_FRONTEND: noninteractive
 
@@ -32,3 +34,59 @@ build:
     key: "$CI_COMMIT_REF_SLUG"
     paths:
       - build/
+
+test:
+  stage: test
+  image: ubuntu:24.04
+  needs: ["build"]
+  before_script:
+    - apt-get update
+    - >
+      apt-get install -y --no-install-recommends
+      build-essential
+      cmake
+      git
+      ca-certificates
+      libopencv-dev
+      libomp-dev
+  script:
+    - set -o pipefail
+    # build/ is restored from cache by key, so this re-runs the build only
+    # if something changed since the build job populated the cache.
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build -j"$(nproc)"
+    - mkdir -p results
+    # test_find_avg_frame is a GoogleTest binary — ask it to also emit a
+    # JUnit-format XML report alongside its normal console output, so
+    # GitLab can parse and render results in the MR "Tests" tab.
+    - ./build/test_find_avg_frame --gtest_output=xml:results/test_find_avg_frame.xml | tee results/test_find_avg_frame.txt
+    - >
+      ./build/bench_find_avg_frame --video "$CI_PROJECT_DIR/tests/video/1k30frames.mp4"
+      --output results/avg_1k30frames.png
+      --benchmark_repetitions=10
+      --benchmark_report_aggregates_only=true
+      --benchmark_out=results/bench_1k30frames.json --benchmark_out_format=json
+      | tee results/bench_1k30frames.txt
+    - >
+      ./build/bench_find_avg_frame --video "$CI_PROJECT_DIR/tests/video/4k60frames.mp4"
+      --output results/avg_4k60frames.png
+      --benchmark_repetitions=10
+      --benchmark_report_aggregates_only=true
+      --benchmark_out=results/bench_4k60frames.json --benchmark_out_format=json
+      | tee results/bench_4k60frames.txt
+  artifacts:
+    name: "$CI_PROJECT_NAME-$CI_COMMIT_SHORT_SHA-results"
+    paths:
+      - results/*.txt
+      - results/*.png
+      - results/*.xml
+      - results/*.json
+    reports:
+      junit: results/test_find_avg_frame.xml
+    expire_in: 1 week
+    when: always
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - build/
+    policy: pull
