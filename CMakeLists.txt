@@ -31,6 +31,7 @@ add_executable(SeePlusPlus
     src/seePlusPlus.cpp
     src/decoder.cpp
     src/KNN.cpp
+    src/FindAvgFrame.cpp
   )
 
 if(OpenMP_CXX_FOUND)
