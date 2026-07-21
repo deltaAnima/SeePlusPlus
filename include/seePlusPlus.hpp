@@ -21,7 +21,7 @@ private:
   size_t KNN_da_frame(SPP_STRUCTS::VideoData* video, SPP_STRUCTS::FrameData* average_frame);
 
 public:
-  std::string frameHunt(std::string path);
+  SPP_STRUCTS::FrameData* frameHunt(std::string path);
 };
 
 #endif    // SEE_PLUS_PLUS_HPP
