@@ -27,10 +27,21 @@ target_compile_options(project_common INTERFACE -mavx2)
 
 # --- Main executable ---
 add_executable(SeePlusPlus
-  src/main.cpp
-  src/seePlusPlus.cpp
-  src/FindAvgFrame.cpp
-  src/decoder.cpp
+    src/main.cpp
+    src/seePlusPlus.cpp
+    src/decoder.cpp
+    src/KNN.cpp
+  )
+
+if(OpenMP_CXX_FOUND)
+  message(STATUS "OpenMP Include Dirs: ${OpenMP_CXX_INCLUDE_DIRS}")
+  target_include_directories(SeePlusPlus PRIVATE ${OpenMP_CXX_INCLUDE_DIRS})
+  target_include_directories(SeePlusPlus PRIVATE /usr/lib/gcc/x86_64-linux-gnu/11/include)
+endif()
+
+target_include_directories(SeePlusPlus PRIVATE 
+  include
+  third_party/cpp-logger
 )
 
 target_link_libraries(SeePlusPlus PRIVATE
