@@ -181,7 +181,7 @@ Results on an AMD Ryzen 7 7840U laptop (8 cores / 16 threads), GCC 16.2, `-O3 -m
 The scalar baseline is ordinary C++ compiled with the same flags, so the compiler is free to auto-vectorize it. The speedup is measured against what the compiler already produces. At 4K, the data is larger than the 16 MB L3 cache, and the search is limited by memory bandwidth (about 28–35 GiB/s), not by computation.
 
 > [!NOTE]
-> The KNN tests and benchmark ([`tests/test_knn.cpp`](tests/test_knn.cpp), [`tests/bench_knn.cpp`](tests/bench_knn.cpp)) were written by Claude (an AI assistant), not by the team. The numbers above come from Claude's run.
+> The KNN tests and benchmark ([`tests/test_knn.cpp`](tests/test_knn.cpp), [`tests/bench_knn.cpp`](tests/bench_knn.cpp)) were written by Claude (an AI assistant), not by the team. The numbers above come from Claude's run(Benchmarks were run on my laptop (Ryzen 7 7840U)).
 
 ### CI
 
