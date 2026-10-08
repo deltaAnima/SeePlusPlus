@@ -25,7 +25,7 @@ video file ──► CPU_video_decoder ──► VideoData (all frames, aligned)
 
 1. **Decode**: [`CPU_video_decoder`](src/decoder.cpp) reads the video with OpenCV in chunks of 64 frames. It copies the frames into a single buffer in parallel, one thread per core.
 2. **Average**: [`find_average_frame`](src/FindAvgFrame.cpp) sums every pixel across all frames into `uint32_t` accumulators, then divides by the frame count. The work is split into 4 KB blocks per OpenMP thread so the partial sums stay in cache.
-3. **Match**: [`KNN.cpp`](src/KNN.cpp) compares each frame with the average frame using an AVX2 sum of absolute differences (`_mm256_sad_epu8`) and returns the index with the smallest error.
+3. **Match**: [`findSmallestErr`](src/KNN.cpp) compares each frame with the average frame using an AVX2 sum of absolute differences (`_mm256_sad_epu8`, 32 bytes per instruction). OpenMP splits the frames across threads. Each thread keeps its own minimum, and the minimums are merged once at the end. On a tie, the lowest frame index wins.
 4. **Orchestrate**: [`SeePlusPlus::frameHunt`](src/seePlusPlus.cpp) runs these three steps on a file path.
 
 ### Memory layout
@@ -125,9 +125,12 @@ The unit tests use synthetic videos, so they need no input files:
 
 ```bash
 ./build/test_find_avg_frame
+./build/test_knn
 # or
 ctest --test-dir build
 ```
+
+### Average frame benchmark
 
 The benchmark times `find_average_frame` on a real video or on random synthetic frames, and can save the average frame as an image:
 
@@ -148,6 +151,38 @@ The benchmark times `find_average_frame` on a real video or on random synthetic 
 > [!NOTE]
 > `*.mp4` files are git-ignored. CI expects test clips at `tests/video/1k30frames.mp4` and `tests/video/4k60frames.mp4`.
 
+### KNN tests and benchmark
+
+[`test_knn`](tests/test_knn.cpp) checks that:
+- the AVX2 L1 kernel gives exactly the same result as a plain scalar version, for sizes around the 32-byte SIMD step (0, 1, 31, 32, 33, …) up to a full 1080p frame
+- a 4K frame where every byte differs by 255 does not overflow
+- `findSmallestErr` finds a planted frame and agrees with a brute-force scalar search
+- ties return the lowest index, and null or empty input returns `SIZE_MAX`
+
+[`bench_knn`](tests/bench_knn.cpp) runs on synthetic random frames (30 frames per resolution, no video file needed). It compares the AVX2 kernel and the full `findSmallestErr` search against a scalar baseline:
+
+```bash
+./build/bench_knn --benchmark_repetitions=5 --benchmark_report_aggregates_only=true
+```
+
+Results on an AMD Ryzen 7 7840U laptop (8 cores / 16 threads), GCC 16.2, `-O3 -mavx2`. Each number is the median of 5 runs:
+
+| Search over 30 frames | Scalar, 1 thread | AVX2 + OpenMP | Speedup |
+|-----------------------|-----------------:|--------------:|--------:|
+| 720p                  | 13.5 ms          | 2.14 ms       | 6.3×    |
+| 1080p                 | 31.8 ms          | 4.98 ms       | 6.4×    |
+| 4K                    | 129 ms           | 24.7 ms       | 5.2×    |
+
+| L1 distance, one frame (1 thread) | Scalar  | AVX2    | Speedup |
+|-----------------------------------|--------:|--------:|--------:|
+| 1080p                             | 1078 µs | 197 µs  | 5.5×    |
+| 4K                                | 4890 µs | 1908 µs | 2.6×    |
+
+The scalar baseline is ordinary C++ compiled with the same flags, so the compiler is free to auto-vectorize it. The speedup is measured against what the compiler already produces. At 4K, the data is larger than the 16 MB L3 cache, and the search is limited by memory bandwidth (about 28–35 GiB/s), not by computation.
+
+> [!NOTE]
+> The KNN tests and benchmark ([`tests/test_knn.cpp`](tests/test_knn.cpp), [`tests/bench_knn.cpp`](tests/bench_knn.cpp)) were written by Claude (an AI assistant), not by the team. The numbers above come from Claude's run.
+
 ### CI
 
 [`.gitlab-ci.yml`](.gitlab-ci.yml) runs two stages on `ubuntu:24.04`:
@@ -165,7 +200,7 @@ The project is **archived**. This table shows the state of each part when it was
 |-------------------------------------|------------------------------------------------|
 | CPU video decoder                   | ✅ Done (file input)                            |
 | Average frame (OpenMP + SIMD)       | ✅ Done, tested, benchmarked                    |
-| KNN closest-frame search (AVX2)     | ⏸️ Partly implemented                           |
+| KNN closest-frame search (AVX2)     | ✅ Done, tested, benchmarked (not yet called by `frameHunt`) |
 | `SeePlusPlus::frameHunt` pipeline   | ⏸️ Partly wired up; returns `nullptr`           |
 | Live stream input (`isStream`)      | 💡 Idea, not started                            |
 | Highway / CUDA acceleration         | 💡 Idea, not started                            |

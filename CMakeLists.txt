@@ -71,8 +71,28 @@ if(BUILD_TESTS)
     GTest::gtest_main
   )
 
+  add_executable(test_knn
+    tests/test_knn.cpp
+    src/KNN.cpp
+  )
+  target_link_libraries(test_knn PRIVATE
+    project_common
+    GTest::gtest_main
+  )
+
   include(GoogleTest)
   gtest_discover_tests(test_find_avg_frame)
+  gtest_discover_tests(test_knn)
+
+  add_executable(bench_knn
+    tests/bench_knn.cpp
+    src/KNN.cpp
+  )
+  target_link_libraries(bench_knn PRIVATE
+    project_common
+    benchmark::benchmark_main
+  )
+  target_compile_options(bench_knn PRIVATE -O3)
 
   add_executable(bench_find_avg_frame
     tests/bench_find_avg_frame.cpp
