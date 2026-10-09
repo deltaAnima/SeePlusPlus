@@ -23,18 +23,18 @@ video file ──► CPU_video_decoder ──► VideoData (all frames, aligned)
                                  KNN (L1 distance) ──► index of the closest real frame
 ```
 
-1. **Decode**: [`CPU_video_decoder`](src/decoder.cpp) reads the video with OpenCV in chunks of 64 frames. It copies the frames into a single buffer in parallel, one thread per core.
+1. **Decode**: [`CPU_video_decoder`](src/decoder.cpp) reads the video with OpenCV in chunks of 64 frames. It copies the frames into a single buffer in parallel, one thread per core, with an AVX2 streaming copy (`vmovntdq`, written in inline assembly) that bypasses the cache. It stops at the end of the buffer even if OpenCV reports the wrong frame count, and `VideoData::count` holds the number of frames actually read.
 2. **Average**: [`find_average_frame`](src/FindAvgFrame.cpp) sums every pixel across all frames into `uint32_t` accumulators, then divides by the frame count. The work is split into 4 KB blocks per OpenMP thread so the partial sums stay in cache.
 3. **Match**: [`findSmallestErr`](src/KNN.cpp) compares each frame with the average frame using an AVX2 sum of absolute differences (`_mm256_sad_epu8`, 32 bytes per instruction). OpenMP splits the frames across threads. Each thread keeps its own minimum, and the minimums are merged once at the end. On a tie, the lowest frame index wins.
 4. **Orchestrate**: [`SeePlusPlus::frameHunt`](src/seePlusPlus.cpp) runs these three steps on a file path.
 
 ### Memory layout
 
-All frames live in one block allocated with `std::aligned_alloc(64, ...)`. Each frame is padded up to a multiple of 64 bytes, so every frame starts on a cache-line boundary and works with aligned SIMD loads.
+All frames live in one block allocated with `std::aligned_alloc(2 MB, ...)`. The decoder then calls `madvise(MADV_HUGEPAGE)` so the kernel can back the block with 2 MB huge pages instead of 4 KB pages. Each frame is padded up to a multiple of 64 bytes, so every frame starts on a cache-line boundary and works with aligned SIMD loads.
 
 | Field                | Meaning                                          |
 |----------------------|--------------------------------------------------|
-| `frame_size`         | `width * height * channels`: the real pixel bytes |
+| `frame_size`         | `Mat::step[0] * height`: the real pixel bytes (equal to `width * height * channels` for OpenCV's continuous frames) |
 | `aligned_frame_size` | `frame_size` rounded up to a multiple of 64      |
 | Frame `i` address    | `data + i * aligned_frame_size`                  |
 
@@ -182,6 +182,57 @@ The scalar baseline is ordinary C++ compiled with the same flags, so the compile
 
 > [!NOTE]
 > The KNN tests and benchmark ([`tests/test_knn.cpp`](tests/test_knn.cpp), [`tests/bench_knn.cpp`](tests/bench_knn.cpp)) were written by Claude (an AI assistant), not by the team. The numbers above come from Claude's run(Benchmarks were run on my laptop (Ryzen 7 7840U)).
+
+### Decoder benchmark (commit `5321a02` vs `801160b`)
+
+Commit `5321a02` changed the decoder:
+
+| Change        | Before (`801160b`)                         | After (`5321a02`)                                         |
+|---------------|--------------------------------------------|-----------------------------------------------------------|
+| Frame copy    | `std::memcpy`                              | AVX2 streaming copy in inline assembly (`vmovntdq` + `prefetchnta`) |
+| Allocation    | 64-byte aligned, 4 KB pages                | 2 MB aligned + `madvise(MADV_HUGEPAGE)`                   |
+| `frame_size`  | `width * height * 3`                       | `Mat::step[0] * height`, from the first decoded frame     |
+| Frame count   | Trusts `CAP_PROP_FRAME_COUNT`; writes past the buffer if the real count is higher | Stops at the end of the buffer; `count` = frames actually read |
+
+The benchmark runs both versions of `CPU_video_decoder` on the same file, takes turns between them, and reports the median of 7 runs. The page cache is warmed first. Both versions produced the same bytes for every frame. "Decode only" is a plain `cap.read()` loop with no copy, the lower limit for both versions.
+
+Results on a **VMware ESXi virtual machine** that has the whole CCD1 of an AMD Ryzen 9 9900X allocated to it (12 vCPUs) and all of its memory reserved in ESXi (20 GB, no ballooning or swapping), Ubuntu 24.04, GCC 13.3, OpenCV 4.6, `-O3 -mavx2`, THP set to `madvise`:
+
+| Video                         | Decode only | Before (`801160b`) | After (`5321a02`) | Change |
+|-------------------------------|------------:|-------------------:|------------------:|-------:|
+| 1920×1080, 600 frames (3.5 GB) | 442 ms      | 874 ms             | 872 ms            | −0.3 % |
+| 1280×720, 1500 frames (3.9 GB) | 454 ms      | 935 ms             | 938 ms            | +0.4 % |
+| 720×358, 240 frames (176 MB)   | 27 ms       | 55 ms              | 57 ms             | +1.9 % |
+| 3840×2160, 150 frames (3.5 GB) | 594 ms      | 1050 ms            | 1025 ms           | −2.4 % |
+
+**The end-to-end time barely changed.** At 1080p and below, the differences are within run-to-run noise. Only at 4K is the new version consistently a little faster (about 25 ms; 5 of its 7 runs were faster than the fastest old run). This matches the copy-stage benchmark below: with 4K frames, 2 MB pages + ASM copy is about 27 ms faster than 4 KB pages + `memcpy` (268 ms vs 296 ms).
+
+A second benchmark timed only the copy stage (64 source frames into a freshly allocated buffer, one thread per core, the same way the decoder does it) and shows why:
+
+| 1080p × 600 frames         | Copy into new buffer | Copy into a buffer that was already written once |
+|----------------------------|---------------------:|-----------------------------------------------:|
+| 4 KB pages + `memcpy` (before) | 275 ms           | 247 ms                                         |
+| 4 KB pages + ASM copy          | 290 ms           | 163 ms                                         |
+| 2 MB pages + `memcpy`          | 318 ms           | 248 ms                                         |
+| 2 MB pages + ASM copy (after)  | 266 ms           | 163 ms                                         |
+
+- The ASM streaming copy is about **35 % faster** than `memcpy`, but only when the destination pages are already mapped.
+- The decoder always writes into a freshly allocated buffer. The kernel has to fault in and zero every page on first write, and that cost dominates whether the pages are 4 KB or 2 MB. The huge pages were in fact used (`AnonHugePages` matched the buffer size); they just did not make the first write faster.
+- Decoding (`cap.read()`) runs on one thread and is not overlapped with the copy. Copying and first-touch page faults together add roughly as much time as decoding.
+
+> [!IMPORTANT]
+> **Open question: the results depend on the machine.** On an AMD Ryzen 7 7840U laptop running native Linux (Ubuntu), the new decoder was about **200 ms faster** than the old one. On the Ryzen 9 9900X ESXi VM above (whole CCD1, all memory reserved), there was no difference at 1080p and below, and only about 25 ms at 4K. This gap needs to be investigated. Things to check:
+> - Run the same benchmark on both machines, with the same videos, so the method is identical (warm page cache, alternating order, median of several runs).
+> - Virtualization: in a VM, page faults and TLB misses go through two levels of page tables, and 2 MB guest pages only help if ESXi also backs the VM with large pages.
+> - CPU topology and thread count: the VM shows its 12 vCPUs as 12 single-core sockets, so the guest does not see the real core/SMT layout. The laptop exposes its real topology.
+> - Memory bandwidth and the page-zeroing cost on first write, which decide how much the streaming copy and huge pages can save.
+>
+> Memory reservation and CPU allocation are already ruled out as causes, because the VM has a full CCD and all of its memory reserved. The next step is to run the same benchmark on the 9900X as bare metal. If the gap only shows up inside the VM, it comes from the difference between ESXi virtualization and bare metal.
+
+Ideas for real speedups: have OpenCV decode straight into the final buffer (`cv::Mat` wrapping the destination pointer), so the copy disappears; overlap decoding with copying; or move decoding to the GPU (NVDEC).
+
+> [!NOTE]
+> This decoder benchmark was run by Claude (an AI assistant). The benchmark programs are not part of the repository.
 
 ### CI
 
