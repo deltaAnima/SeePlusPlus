@@ -1,5 +1,15 @@
 #include "../include/seePlusPlus.hpp"
+#include "../include/KNN.hpp"
 
+SPP_STRUCTS::FrameData* SeePlusPlus::find_average_frame(SPP_STRUCTS::VideoData* video)
+{
+  return ::find_average_frame(video);
+}
+
+size_t SeePlusPlus::KNN_da_frame(SPP_STRUCTS::VideoData* video, SPP_STRUCTS::FrameData* average_frame)
+{
+  return findSmallestErr(average_frame, *video);
+}
 
 SPP_STRUCTS::FrameData* SeePlusPlus::frameHunt(std::string path)
 {

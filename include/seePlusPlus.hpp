@@ -12,7 +12,6 @@
 #include <string>
 #include <cstdlib>
 
-
 class SeePlusPlus
 {
 private:
@@ -24,4 +23,4 @@ public:
   SPP_STRUCTS::FrameData* frameHunt(std::string path);
 };
 
-#endif    // SEE_PLUS_PLUS_HPP
+#endif    // SEE_PLUS_PLUS_HPP 
