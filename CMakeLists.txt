@@ -105,6 +105,17 @@ if(BUILD_TESTS)
     benchmark::benchmark_main
   )
   target_compile_options(bench_find_avg_frame PRIVATE -O3)
+
+  add_executable(bench_decoder
+    tests/bench_decoder.cpp
+    src/decoder.cpp
+  )
+  target_link_libraries(bench_decoder PRIVATE
+    project_common
+    ${OpenCV_LIBS}
+    benchmark::benchmark_main
+  )
+  target_compile_options(bench_decoder PRIVATE -O3)
 endif()
 
 # --- Diagnostics ---
